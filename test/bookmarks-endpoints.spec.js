@@ -21,7 +21,12 @@ describe.only('Bookmarks Endpoints', function() {
 
     describe('GET /bookmarks', () => {
         context('Given no data', () => {
-
+            it('responds with 200 and an empty list', () => {
+                return supertest(app)
+                    .get('/bookmarks')
+                    .set('Authorization', `Bearer ${process.env.API_TOKEN}`)
+                    .expect(200, [])
+            })
         })
 
         context('Given there are bookmarks in the database', () => {
@@ -44,7 +49,15 @@ describe.only('Bookmarks Endpoints', function() {
 
     describe('GET /bookmarks:id', () => {
         context('Given no data', () => {
-
+            it('responds with a 404', () => {
+                const bookmarkId = 123456
+                return supertest(app)
+                    .get(`/bookmarks/${bookmarkId}`)
+                    .set('Authorization', `Bearer ${process.env.API_TOKEN}`)
+                    .expect(404, {
+                        error: { message: `Bookmark Not Found` }
+                    })
+            })
         })
 
         context('Given there are bookmarks in the database', () => {
