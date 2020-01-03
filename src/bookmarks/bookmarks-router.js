@@ -2,17 +2,26 @@ const express = require('express')
 const uuid = require('uuid/v4')
 const { isWebUri } = require('valid-url')
 const logger = require('../logger')
+const xss = require('xss')
 const BookmarksService = require('./bookmarks-service')
 
 const bookmarksRouter = express.Router()
 const bodyParser = express.json()
+
+const serializeBookmark = bookmark => ({
+  id: bookmark.id,
+  title: xss(bookmark.title),
+  url: bookmark.url,
+  description: xss(bookmark.description),
+  rating: bookmark.rating
+})
 
 bookmarksRouter
   .route('/bookmarks')
   .get((req, res, next) => {
     BookmarksService.getAllBookmarks(req.app.get('db'))
       .then(bookmarks => {
-        res.json(bookmarks)
+        res.json(bookmarks.map(serializeBookmark))
       })
       .catch(next)
   })
@@ -55,7 +64,7 @@ bookmarksRouter
         res
           .status(201)
           .location(`/bookmarks/${bookmark.id}`)
-          .json(bookmark)
+          .json(serializeBookmark(bookmark))
       })
       .catch(next)
   })
@@ -79,7 +88,7 @@ bookmarksRouter
 
   })
   .get((req, res) => {
-    res.json(res.bookmark)
+    res.json(serializeBookmark(res.bookmark))
   })
   .delete((req, res, next) => {
     // TODO: update to use db
@@ -88,7 +97,7 @@ bookmarksRouter
       req.app.get('db'),
       id
     )
-      .then(numRowsAffected => {
+      .then(() => {
         logger.info(`Card with id ${id} deleted.`)
         res.status(204).end()
       })

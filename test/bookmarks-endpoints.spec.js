@@ -1,6 +1,6 @@
 const knex = require('knex')
 const app = require('../src/app')
-const { makeBookmarksArray } = require('./bookmarks.fixtures')
+const { makeBookmarksArray, makeMaliciousBookmark } = require('./bookmarks.fixtures')
 
 describe.only('Bookmarks Endpoints', function() {
     let db
@@ -78,9 +78,30 @@ describe.only('Bookmarks Endpoints', function() {
                     .expect(200, expectedBookmark)
             })
         })
+
+        context('Given an XSS attack bookmark', () => {
+            const { maliciousBookmark, expectedBookmark } = makeMaliciousBookmark()
+
+            beforeEach('insert malicious bookmark', () => {
+                return db
+                    .into('bookmarks')
+                    .insert([ maliciousBookmark ])
+            })
+
+            it('removes XSS attack content', () => {
+                return supertest(app)
+                    .get(`/bookmarks/${maliciousBookmark.id}`)
+                    .set('Authorization', `Bearer ${process.env.API_TOKEN}`)
+                    .expect(200)
+                    .expect(res => {
+                        expect(res.body.title).to.eql(expectedBookmark.title)
+                        expect(res.body.description).to.eql(expectedBookmark.description)
+                    })
+            })
+        })
     })
 
-    describe.only('POST /bookmarks', () => {
+    describe('POST /bookmarks', () => {
         it(`responds with 400 missing 'title' if not supplied`, () => {
             const newBookmarkMissingTitle = {
                 // title: 'new bookmark test',
@@ -182,6 +203,66 @@ describe.only('Bookmarks Endpoints', function() {
                         .set('Authorization', `Bearer ${process.env.API_TOKEN}`)
                         .expect(postRes.body)    
                 )
+        })
+
+        context('Given an XSS attack bookmark', () => {
+            const { maliciousBookmark, expectedBookmark } = makeMaliciousBookmark()
+
+            beforeEach('insert malicious bookmark', () => {
+                return db
+                    .into('bookmarks')
+                    .insert([ maliciousBookmark ])
+            })
+
+            it('removes XSS attack content', () => {
+                return supertest(app)
+                    .get(`/bookmarks`)
+                    .set('Authorization', `Bearer ${process.env.API_TOKEN}`)
+                    .expect(200)
+                    .expect(res => {
+                        expect(res.body[0].title).to.eql(expectedBookmark.title)
+                        expect(res.body[0].description).to.eql(expectedBookmark.description)
+                    })
+            })
+        })
+    })
+
+    describe.only('DELETE /bookmarks/:id', () => {
+        context('Given no bookmarks', () => {
+            it('responds with 404', () => {
+                const bookmarkId = 123456
+                return supertest(app)
+                    .delete(`/bookmarks/${bookmarkId}`)
+                    .set('Authorization', `Bearer ${process.env.API_TOKEN}`)
+                    .expect(404, {
+                        error: { message: `Bookmark Not Found` }
+                    })
+            })
+        })
+
+        context('Given there are bookmarks in the database', () => {
+            const testBookmarks = makeBookmarksArray()
+
+            beforeEach('insert bookmarks', () => {
+                return db
+                    .into('bookmarks')
+                    .insert(testBookmarks)
+            })
+
+            it('responds with 204 and removes the bookmark', () => {
+                const idToDelete = 2
+                const expectedBookmarks = testBookmarks.filter(bookmark => bookmark.id !== idToDelete)
+                return supertest(app)
+                    .delete(`/bookmarks/${idToDelete}`)
+                    .set('Authorization', `Bearer ${process.env.API_TOKEN}`)
+                    .expect(204)
+                    .then(res => 
+                        supertest(app)
+                            .get(`/bookmarks`)
+                            .set('Authorization', `Bearer ${process.env.API_TOKEN}`)
+                            .expect(expectedBookmarks)    
+                    )
+            })
         })
     })
 })
